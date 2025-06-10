@@ -3,6 +3,8 @@ const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
 
+require('./keepalive'); // Keep the service alive on Render
+
 const client = new Client({
   authStrategy: new LocalAuth()
 });
