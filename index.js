@@ -1,12 +1,15 @@
+// bot.js
+
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
-const fs = require("fs");
-const path = require("path");
+const TelegramBot = require("node-telegram-bot-api");
 
-require('./keepalive'); // Keep the service alive on Render
+const TARGET_PHONE = "972532490351@c.us"; // עדכן כאן את מספר וואטסאפ היעד בפורמט הנכון
+const TELEGRAM_TOKEN = "8140239961:AAG00jz9mBFsdr_eykcVfZIYSaw0iB94Sc4"; // עדכן כאן את טוקן הטלגרם שלך
 
+// התחברות לוואטסאפ
 const client = new Client({
-  authStrategy: new LocalAuth()
+  authStrategy: new LocalAuth(),
 });
 
 client.on("qr", (qr) => {
@@ -18,24 +21,27 @@ client.on("ready", () => {
   console.log("✅ וואטסאפ מחובר!");
 });
 
-// בדיקה כל 3 שניות אם יש הודעה לשליחה
-setInterval(() => {
-  const filePath = path.join(__dirname, "..", "message_to_send.txt");
+// התחברות לטלגרם
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
-  if (fs.existsSync(filePath)) {
-    const data = fs.readFileSync(filePath, "utf8").trim();
+bot.on("message", async (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
 
-    if (data) {
-      const [to, message] = data.split("|");
-
-      if (to && message) {
-        console.log(`📤 שולח ל־${to}: ${message}`);
-        client.sendMessage(to, message);
-      }
-
-      fs.unlinkSync(filePath); // מוחק את הקובץ אחרי השליחה
-    }
+  if (!text) {
+    bot.sendMessage(chatId, "❌ רק הודעות טקסט נתמכות.");
+    return;
   }
-}, 3000);
 
+  try {
+    await client.sendMessage(TARGET_PHONE, text);
+    bot.sendMessage(chatId, "✅ ההודעה התקבלה ותישלח מיד לוואטסאפ.");
+    console.log(`📤 שלח הודעה לוואטסאפ: ${text}`);
+  } catch (err) {
+    console.error("❌ שגיאה בשליחת הודעה לוואטסאפ:", err);
+    bot.sendMessage(chatId, "❌ קרתה שגיאה בשליחת ההודעה.");
+  }
+});
+
+// הפעלת הלקוח של וואטסאפ
 client.initialize();
