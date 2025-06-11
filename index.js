@@ -1,47 +1,52 @@
-// bot.js
-
 const { Client, LocalAuth } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
-const TelegramBot = require("node-telegram-bot-api");
+const fs = require("fs");
+const path = require("path");
+const express = require("express");
+const QRCode = require("qrcode");
+require("./keepalive");
 
-const TARGET_PHONE = "972532490351@c.us"; // עדכן כאן את מספר וואטסאפ היעד בפורמט הנכון
-const TELEGRAM_TOKEN = "8140239961:AAG00jz9mBFsdr_eykcVfZIYSaw0iB94Sc4"; // עדכן כאן את טוקן הטלגרם שלך
+const app = express();
+app.use(express.static("public")); // מאפשר גישה ל־qr.png
 
-// התחברות לוואטסאפ
-const client = new Client({
-  authStrategy: new LocalAuth(),
+app.listen(3000, () => {
+  console.log("🌐 Express server is running on port 3000");
 });
 
-client.on("qr", (qr) => {
-  console.log("📱 סרוק את הקוד עם וואטסאפ:");
-  qrcode.generate(qr, { small: true });
+const client = new Client({
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  }
+});
+
+client.on("qr", async (qr) => {
+  console.log("📷 שומר את קוד ה־QR לקובץ...");
+  await QRCode.toFile("./public/qr.png", qr);
+  console.log("✅ סרוק את קוד ה־QR כאן:");
+  console.log("https://<your-app-name>.onrender.com/qr.png");
 });
 
 client.on("ready", () => {
   console.log("✅ וואטסאפ מחובר!");
 });
 
-// התחברות לטלגרם
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+setInterval(() => {
+  const filePath = path.join(__dirname, "message_to_send.txt");
 
-bot.on("message", async (msg) => {
-  const chatId = msg.chat.id;
-  const text = msg.text;
+  if (fs.existsSync(filePath)) {
+    const data = fs.readFileSync(filePath, "utf8").trim();
 
-  if (!text) {
-    bot.sendMessage(chatId, "❌ רק הודעות טקסט נתמכות.");
-    return;
+    if (data) {
+      const [to, message] = data.split("|");
+
+      if (to && message) {
+        console.log(`📤 שולח ל־${to}: ${message}`);
+        client.sendMessage(to, message);
+      }
+
+      fs.unlinkSync(filePath);
+    }
   }
+}, 3000);
 
-  try {
-    await client.sendMessage(TARGET_PHONE, text);
-    bot.sendMessage(chatId, "✅ ההודעה התקבלה ותישלח מיד לוואטסאפ.");
-    console.log(`📤 שלח הודעה לוואטסאפ: ${text}`);
-  } catch (err) {
-    console.error("❌ שגיאה בשליחת הודעה לוואטסאפ:", err);
-    bot.sendMessage(chatId, "❌ קרתה שגיאה בשליחת ההודעה.");
-  }
-});
-
-// הפעלת הלקוח של וואטסאפ
 client.initialize();
